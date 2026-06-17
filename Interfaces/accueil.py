@@ -1,4 +1,5 @@
 import os
+import re
 import pandas as pd
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFileDialog,
@@ -9,6 +10,24 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from Calcul.Calculs_portance import charger_excel_brut
 from Interfaces.widgets_communs import bouton, separateur, description, LABEL_STYLE
+
+
+def extraire_nom_participant(filename: str) -> str:
+    """Extrait le nom du participant depuis le nom de fichier.
+
+    Format attendu : restitution_des_resultats_NOM.xls(x)
+    Variantes acceptées : séparateurs _ ou - ou espaces, casse quelconque.
+    Sinon, prend la dernière partie après le dernier _ ou -.
+    """
+    base = os.path.splitext(os.path.basename(filename))[0]
+    m = re.match(r'(?i)restitution[_\-\s]+des[_\-\s]+resultats?[_\-\s]+(.+)', base)
+    if m:
+        return m.group(1).strip().strip('_- ')
+    # Fallback : dernière partie après le dernier séparateur
+    parts = re.split(r'[_\-]', base)
+    if len(parts) > 1:
+        return parts[-1].strip()
+    return base
 
 XLS_DEFAULT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', 'Formatage_data_ex_STAC_Dynatest.xls')
@@ -110,7 +129,8 @@ class AccueilTab(QWidget):
         erreurs = []
         for path in self._fichiers:
             try:
-                resultats_par_fichier.append((os.path.basename(path), charger_excel_brut(path)))
+                nom_participant = extraire_nom_participant(path)
+                resultats_par_fichier.append((nom_participant, charger_excel_brut(path)))
             except Exception as e:
                 erreurs.append(f"{os.path.basename(path)} : {e}")
 
@@ -127,7 +147,12 @@ class AccueilTab(QWidget):
         self.donnees = {}
         lignes = []
         for cle in sorted(cles):
-            frames = [d[cle] for _, d in resultats_par_fichier if cle in d and hasattr(d[cle], 'shape') and not d[cle].empty]
+            frames = []
+            for nom, d in resultats_par_fichier:
+                if cle in d and hasattr(d[cle], 'shape') and not d[cle].empty:
+                    df = d[cle].copy()
+                    df['participant'] = nom
+                    frames.append(df)
             if frames:
                 df_merge = pd.concat(frames, ignore_index=True)
                 self.donnees[cle] = df_merge
@@ -136,7 +161,9 @@ class AccueilTab(QWidget):
                 lignes.append(f"  ⚠  <b>{cle}</b> : vide ou non parsé")
 
         nb_fichiers = len(resultats_par_fichier)
-        en_tete = f"<b>Données chargées ({nb_fichiers} fichier{'s' if nb_fichiers > 1 else ''}) :</b>"
+        participants = [nom for nom, _ in resultats_par_fichier]
+        en_tete = (f"<b>Données chargées ({nb_fichiers} fichier{'s' if nb_fichiers > 1 else ''}) — "
+                   f"Participants : {', '.join(participants)}</b>")
         self.info_label.setText("<br>".join([en_tete] + lignes))
         self.donnees_chargees.emit(self.donnees)
 

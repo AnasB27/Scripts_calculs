@@ -2,9 +2,10 @@
 import pandas as pd
 from PyQt5.QtWidgets import (
     QFrame, QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QSizePolicy, QLabel
+    QHeaderView, QSizePolicy, QLabel, QComboBox, QWidget,
+    QHBoxLayout, QToolButton, QMenu, QAction, QWidgetAction
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
@@ -72,10 +73,87 @@ def description(texte: str) -> QLabel:
     return lbl
 
 
+# ── CheckableComboBox ─────────────────────────────────────────────────────────
+
+class CheckableComboBox(QPushButton):
+    """Bouton déroulant avec QMenu à cases à cocher pour sélection multiple."""
+
+    selection_changed = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._actions = []
+        self._menu = QMenu(self)
+        self._menu.setStyleSheet(
+            "QMenu { font-size: 13px; padding: 4px 0; }"
+            "QMenu::item { padding: 6px 16px 6px 8px; }"
+            "QMenu::item:selected { background: #eaf2f8; }"
+            "QMenu::indicator { width: 16px; height: 16px; margin-left: 6px; }"
+        )
+        self.setMenu(self._menu)
+        self.setStyleSheet(
+            "QPushButton { text-align: left; padding: 4px 10px; "
+            "border: 1px solid #bdc3c7; border-radius: 4px; "
+            "background: white; color: #2c3e50; font-size: 13px; }"
+            "QPushButton:hover { border-color: #2980b9; }"
+            "QPushButton::menu-indicator { subcontrol-position: right center; "
+            "image: none; width: 0; }"
+        )
+        self.setFixedHeight(28)
+        self._update_display()
+
+    def setMinimumWidth(self, w):
+        super().setMinimumWidth(w)
+
+    def setItems(self, items: list, check_all: bool = False):
+        self._menu.clear()
+        self._actions = []
+        for text in items:
+            action = self._menu.addAction(text)
+            action.setCheckable(True)
+            action.setChecked(check_all)
+            action.triggered.connect(self._on_action_triggered)
+            self._actions.append(action)
+        self._update_display()
+
+    def checkedItems(self) -> list:
+        return [a.text() for a in self._actions if a.isChecked()]
+
+    def selectAll(self):
+        for a in self._actions:
+            a.setChecked(True)
+        self._update_display()
+        self.selection_changed.emit()
+
+    def selectNone(self):
+        for a in self._actions:
+            a.setChecked(False)
+        self._update_display()
+        self.selection_changed.emit()
+
+    def _on_action_triggered(self):
+        self._update_display()
+        self.selection_changed.emit()
+
+    def _update_display(self):
+        checked = self.checkedItems()
+        total = len(self._actions)
+        if not checked:
+            self.setText("  Sélectionner…  ▾")
+        elif len(checked) == total and total > 0:
+            self.setText("  Tous  ▾")
+        elif len(checked) <= 2:
+            self.setText("  " + ", ".join(checked) + "  ▾")
+        else:
+            self.setText(f"  {len(checked)}/{total} sélectionnés  ▾")
+
+
 # ── NavigationCanvas ──────────────────────────────────────────────────────────
 
 class NavigationCanvas(FigureCanvas):
     """FigureCanvas + barre d'outils matplotlib intégrée dans un conteneur vertical."""
+
+    graphique_trace = pyqtSignal(object, str)
 
     def __init__(self, figsize=(8, 4), parent=None):
         self.figure = Figure(figsize=figsize, tight_layout=True)
@@ -97,6 +175,17 @@ class NavigationCanvas(FigureCanvas):
         if rows == 1 and cols == 1:
             return self.figure.add_subplot(111)
         return self.figure.subplots(rows, cols)
+
+    def tracer(self, label: str = ""):
+        """Redessine le canvas ET enregistre dans l'historique. Appeler à la place de draw()."""
+        self.draw()
+        if not label:
+            axes = self.figure.get_axes()
+            if axes and axes[0].get_title():
+                label = axes[0].get_title()
+            else:
+                label = "Graphique"
+        self.graphique_trace.emit(self.figure, label)
 
 
 # ── Tableau ───────────────────────────────────────────────────────────────────

@@ -10,7 +10,8 @@ from Calcul.Calculs_portance import (
 )
 from Interfaces.onglet_base import OngletBase
 from Interfaces.widgets_communs import (
-    bouton, NavigationCanvas, remplir_tableau, peupler_combo, appliquer_filtre_df
+    bouton, NavigationCanvas, remplir_tableau, peupler_combo, appliquer_filtre_df,
+    CheckableComboBox
 )
 
 
@@ -19,7 +20,8 @@ class RepetabiliteTab(OngletBase):
     desc_onglet  = ""
 
     def _build_controls(self):
-        self.combo_app = QComboBox(); self.combo_app.addItem("Tous")
+        self.combo_participant = CheckableComboBox()
+        self.combo_participant.setMinimumWidth(160)
         self.combo_col = QComboBox()
         for c in DEFLEXION_COLS:
             self.combo_col.addItem(c)
@@ -29,7 +31,7 @@ class RepetabiliteTab(OngletBase):
         btn = bouton("Calculer")
         btn.clicked.connect(self._calculer)
         return self._ctrl_row(
-            QLabel("Appareil :"),   self.combo_app,
+            QLabel("Participant :"), self.combo_participant,
             QLabel("Déflexion :"),  self.combo_col,
             QLabel("Axe boxplot :"), self.combo_group,
             None, btn
@@ -70,12 +72,17 @@ class RepetabiliteTab(OngletBase):
         return tabs
 
     def _actualiser_filtres(self):
-        peupler_combo(self.combo_app, self.df_chaussee, 'appareil')
+        self.combo_participant.setItems(self._participants, check_all=True)
 
     def _calculer(self):
         if not self._guard_chaussee():
             return
-        df    = appliquer_filtre_df(self.df_chaussee, 'appareil', self.combo_app.currentText())
+        selected = self.combo_participant.checkedItems()
+        if not selected:
+            QMessageBox.information(self, "Sélection vide",
+                                    "Sélectionnez au moins un participant.")
+            return
+        df    = self.df_chaussee[self.df_chaussee['participant'].isin(selected)]
         col   = self.combo_col.currentText()
         group = self.combo_group.currentText()
 
@@ -84,7 +91,7 @@ class RepetabiliteTab(OngletBase):
             remplir_tableau(self.table_rep, rep)
             ax = self.canvas_rep.ax()
             tracer_boxplot_repetabilite(df, col=col, groupby=group, ax=ax)
-            self.canvas_rep.draw()
+            self.canvas_rep.tracer()
         except Exception as e:
             QMessageBox.warning(self, "Répétabilité", str(e))
 
@@ -94,6 +101,6 @@ class RepetabiliteTab(OngletBase):
             ax2 = self.canvas_repro.ax()
             tracer_boxplot_repetabilite(df, col=col, groupby='point', ax=ax2)
             ax2.set_title(f"Reproductibilité — {col} par point")
-            self.canvas_repro.draw()
+            self.canvas_repro.tracer()
         except Exception as e:
             QMessageBox.warning(self, "Reproductibilité", str(e))
