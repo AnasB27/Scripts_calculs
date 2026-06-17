@@ -15,10 +15,14 @@ from Interfaces.pesage import PesageTab
 from Interfaces.bassins import BassinsTab
 from Interfaces.repetabilite import RepetabiliteTab
 from Interfaces.linearite import LineariteTab
+from Interfaces.critere_linearite import CritereLineariteTab
 from Interfaces.bouclage import BouclageTab
 from Interfaces.chute_rep import ChuteRepresentativeTab
 from Interfaces.comparaison import ComparaisonTab
+from Interfaces.dispersions import DispersionsTab
+from Interfaces.efforts_corriges import EffortsCorrigesTab
 from Interfaces.edition import EditionTab
+from Interfaces.historique import HistoriqueTab
 
 
 APP_STYLE = """
@@ -105,9 +109,13 @@ class MainWindow(QMainWindow):
         self.bassins_tab     = BassinsTab()
         self.repet_tab       = RepetabiliteTab()
         self.lin_tab         = LineariteTab()
+        self.crit_lin_tab    = CritereLineariteTab()
         self.bouclage_tab    = BouclageTab()
         self.chute_rep_tab   = ChuteRepresentativeTab()
         self.comparaison_tab = ComparaisonTab()
+        self.dispersions_tab = DispersionsTab()
+        self.efforts_tab     = EffortsCorrigesTab()
+        self.historique_tab  = HistoriqueTab()
 
         self._tabs.addTab(self.accueil_tab,     "  Accueil  ")
         self._tabs.addTab(self.edition_tab,     "  ✏  Données  ")
@@ -115,9 +123,16 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self.bassins_tab,     "  Bassins  ")
         self._tabs.addTab(self.repet_tab,       "  Répétabilité  ")
         self._tabs.addTab(self.lin_tab,         "  Linéarité  ")
+        self._tabs.addTab(self.crit_lin_tab,    "  Critère R²  ")
         self._tabs.addTab(self.bouclage_tab,    "  Bouclage  ")
         self._tabs.addTab(self.chute_rep_tab,   "  Chute représentative  ")
         self._tabs.addTab(self.comparaison_tab, "  Comparaison  ")
+        self._tabs.addTab(self.dispersions_tab, "  Dispersions  ")
+        self._tabs.addTab(self.efforts_tab,     "  Efforts corrigés  ")
+        self._tabs.addTab(self.historique_tab,  "  📋 Historique  ")
+
+        # Connecter tous les canvas à l'historique
+        self._connecter_historique()
 
         # Chargement initial → onglet édition + onglets d'analyse
         self.accueil_tab.donnees_chargees.connect(self.edition_tab.set_donnees)
@@ -135,10 +150,21 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self._status)
         self._status.showMessage("Prêt — chargez un fichier depuis l'onglet Accueil.")
 
+    def _connecter_historique(self):
+        """Parcourt tous les onglets et connecte chaque NavigationCanvas à l'historique."""
+        from Interfaces.widgets_communs import NavigationCanvas
+        for tab in [self.pesage_tab, self.bassins_tab, self.repet_tab,
+                    self.lin_tab, self.crit_lin_tab, self.bouclage_tab,
+                    self.chute_rep_tab, self.comparaison_tab,
+                    self.dispersions_tab, self.efforts_tab]:
+            for canvas in tab.findChildren(NavigationCanvas):
+                canvas.graphique_trace.connect(self.historique_tab.ajouter_graphique)
+
     def _propager_donnees(self, donnees: dict):
         for tab in [self.pesage_tab, self.bassins_tab, self.repet_tab,
-                    self.lin_tab, self.bouclage_tab, self.chute_rep_tab,
-                    self.comparaison_tab]:
+                    self.lin_tab, self.crit_lin_tab, self.bouclage_tab,
+                    self.chute_rep_tab, self.comparaison_tab,
+                    self.dispersions_tab, self.efforts_tab]:
             try:
                 tab.set_donnees(donnees)
             except Exception:
