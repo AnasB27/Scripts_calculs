@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QLabel, QComboBox, QMessageBox
 
 from Calcul.Calculs_portance import calculer_chute_representative, DEFLEXION_COLS, GEOPHONE_DISTANCES
 from Interfaces.onglet_base import OngletTableauCanvas
-from Interfaces.widgets_communs import bouton, peupler_combo, appliquer_filtre_df
+from Interfaces.widgets_communs import bouton, peupler_combo, appliquer_filtre_df, CheckableComboBox
 
 
 class ChuteRepresentativeTab(OngletTableauCanvas):
@@ -14,25 +14,31 @@ class ChuteRepresentativeTab(OngletTableauCanvas):
     splitter_sizes = [440, 420]
 
     def _build_controls(self):
-        self.combo_app = QComboBox(); self.combo_app.addItem("Tous")
+        self.combo_participant = CheckableComboBox()
+        self.combo_participant.setMinimumWidth(160)
         self.combo_col = QComboBox()
         for c in DEFLEXION_COLS:
             self.combo_col.addItem(c)
         btn = bouton("Calculer")
         btn.clicked.connect(self._calculer)
         return self._ctrl_row(
-            QLabel("Appareil :"), self.combo_app,
+            QLabel("Participant :"), self.combo_participant,
             QLabel("Déflexion ref. :"), self.combo_col,
             None, btn
         )
 
     def _actualiser_filtres(self):
-        peupler_combo(self.combo_app, self.df_chaussee, 'appareil')
+        self.combo_participant.setItems(self._participants, check_all=True)
 
     def _calculer(self):
         if not self._guard_chaussee():
             return
-        df     = appliquer_filtre_df(self.df_chaussee, 'appareil', self.combo_app.currentText())
+        selected = self.combo_participant.checkedItems()
+        if not selected:
+            QMessageBox.information(self, "Sélection vide",
+                                    "Sélectionnez au moins un participant.")
+            return
+        df     = self.df_chaussee[self.df_chaussee['participant'].isin(selected)]
         col    = self.combo_col.currentText()
         df_rep = calculer_chute_representative(df, col_deflexion=col)
         if df_rep.empty:

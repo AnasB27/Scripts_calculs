@@ -7,19 +7,19 @@ from PyQt5.QtWidgets import (
 
 from Calcul.Calculs_portance import DEFLEXION_COLS, GEOPHONE_DISTANCES
 from Interfaces.onglet_base import OngletCanvasSeul
-from Interfaces.widgets_communs import bouton, peupler_combo, appliquer_filtre_df
+from Interfaces.widgets_communs import bouton, peupler_combo, appliquer_filtre_df, CheckableComboBox
 
 
 class ComparaisonTab(OngletCanvasSeul):
     titre_onglet  = "Comparaison entre participants / points d'essai"
     desc_onglet   = ("Superpose les bassins de déflexion moyens. "
-                     "Ctrl+clic pour sélection multiple dans la liste.")
+                     "Cochez les participants ou points à comparer.")
     canvas_figsize = (9, 5)
 
     def _build_controls(self):
         # Ligne 1 : mode, niveau, déflexion, bouton
         self.combo_mode = QComboBox()
-        self.combo_mode.addItems(["Appareil", "Point d'essai"])
+        self.combo_mode.addItems(["Participant", "Point d'essai"])
         self.combo_mode.currentIndexChanged.connect(self._on_mode_change)
         self.combo_niveau = QComboBox(); self.combo_niveau.addItem("Tous")
         self.combo_col = QComboBox()
@@ -35,18 +35,18 @@ class ComparaisonTab(OngletCanvasSeul):
             None, btn
         )
 
-        # Ligne 2 : liste de sélection
-        self.label_liste = QLabel("Appareils disponibles (Ctrl+clic) :")
-        self.list_widget = QListWidget()
-        self.list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.list_widget.setFixedHeight(72)
+        # Ligne 2 : liste de sélection avec cases à cocher
+        self.label_liste = QLabel("Participants disponibles :")
+        self.check_combo_list = CheckableComboBox()
+        self.check_combo_list.setMinimumWidth(250)
 
         ligne2 = QWidget()
         h = QHBoxLayout(ligne2)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(8)
         h.addWidget(self.label_liste)
-        h.addWidget(self.list_widget)
+        h.addWidget(self.check_combo_list)
+        h.addStretch()
 
         # Conteneur vertical des deux lignes
         container = QWidget()
@@ -63,28 +63,28 @@ class ComparaisonTab(OngletCanvasSeul):
 
     def _on_mode_change(self):
         mode = self.combo_mode.currentText()
-        col  = 'appareil' if mode == "Appareil" else 'point'
-        self.label_liste.setText(
-            f"{'Appareils' if mode == 'Appareil' else 'Points'} disponibles (Ctrl+clic) :"
-        )
-        self.list_widget.clear()
-        if self.df_chaussee is not None and col in self.df_chaussee.columns:
-            for v in sorted(self.df_chaussee[col].dropna().unique()):
-                self.list_widget.addItem(str(v))
+        if mode == "Participant":
+            self.label_liste.setText("Participants disponibles :")
+            self.check_combo_list.setItems(self._participants, check_all=True)
+        else:
+            self.label_liste.setText("Points disponibles :")
+            if self.df_chaussee is not None and 'point' in self.df_chaussee.columns:
+                points = sorted(str(v) for v in self.df_chaussee['point'].dropna().unique())
+                self.check_combo_list.setItems(points, check_all=True)
 
     def _comparer(self):
         if not self._guard_chaussee():
             return
-        selected = [item.text() for item in self.list_widget.selectedItems()]
+        selected = self.check_combo_list.checkedItems()
         if not selected:
             QMessageBox.information(self, "Sélection vide",
-                                    "Sélectionnez au moins un élément dans la liste.")
+                                    "Cochez au moins un élément.")
             return
 
         df        = appliquer_filtre_df(self.df_chaussee, 'niveau_effort',
                                         self.combo_niveau.currentText())
         mode      = self.combo_mode.currentText()
-        col_group = 'appareil' if mode == "Appareil" else 'point'
+        col_group = 'participant' if mode == "Participant" else 'point'
         niveau    = self.combo_niveau.currentText()
 
         ax   = self.canvas.ax()
@@ -103,4 +103,4 @@ class ComparaisonTab(OngletCanvasSeul):
         ax.legend(fontsize=9)
         ax.grid(True, alpha=0.4)
         ax.invert_yaxis()
-        self.canvas.draw()
+        self.canvas.tracer()

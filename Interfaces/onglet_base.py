@@ -54,6 +54,7 @@ class OngletBase(QWidget, metaclass=_MetaOnglet):
         super().__init__()
         self.df_chaussee = None
         self.df_pesage   = None
+        self._participants = []
 
         self._root = QVBoxLayout()
         self._root.setContentsMargins(20, 16, 20, 16)
@@ -92,6 +93,9 @@ class OngletBase(QWidget, metaclass=_MetaOnglet):
     def set_donnees(self, donnees: dict):
         self.df_chaussee = donnees.get('chaussee')
         self.df_pesage   = donnees.get('pesage')
+        self._participants = []
+        if self.df_chaussee is not None and 'participant' in self.df_chaussee.columns:
+            self._participants = sorted(self.df_chaussee['participant'].dropna().unique().tolist())
         self._actualiser_filtres()
 
     def _actualiser_filtres(self):
@@ -173,7 +177,7 @@ class OngletTableauCanvas(OngletBase):
         remplir_tableau(self.table, df, fmt_float=fmt_float)
         ax = self.canvas.ax()
         tracer_fn(ax)
-        self.canvas.draw()
+        self.canvas.tracer()
 
 
 class OngletDoubleCanvas(OngletBase):
